@@ -123,7 +123,7 @@ Both lists are populated during `figma-sync:init` and updated incrementally duri
 ### Parent manifest enables monorepo component sharing
 
 The `parent` field contains a relative path to another project's `.figma-sync/figma-sync.json`. This is used in monorepos where:
-- Shared components are tracked in a parent manifest (e.g., `packages/components/.figma-sync/figma-sync.json`)
+- Shared components are tracked in a parent manifest (e.g., `templates/inventor-portal/local-packages/inventor-portal-components/.figma-sync/figma-sync.json`)
 - Prototype screens are tracked in a child manifest (e.g., `prototypes/my-app/.figma-sync/figma-sync.json`)
 
 The Screen Push Guard resolves components from both the local manifest AND the parent manifest. A component is considered available if it has `status: "adopted"` or `"approved"` in either manifest.
