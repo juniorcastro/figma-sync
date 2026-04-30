@@ -66,7 +66,7 @@ Do NOT read these into the orchestrator context. Pass the file paths to agents s
 
 ## Screen/Flow Push Guard (MANDATORY)
 
-Before pushing any screen or flow, check that **every component used by that screen** — both library AND custom — has been pushed and approved in the manifest. Screens must be composed from Figma component instances — never flat recreations.
+Before pushing any screen or flow, check that **every component used by that screen** — both library AND custom — has been pushed and approved (or adopted) in the manifest. Screens must be composed from Figma component instances — never flat recreations.
 
 **Enforcement:**
 1. Read the screen's source file and identify ALL components it uses:
@@ -74,7 +74,7 @@ Before pushing any screen or flow, check that **every component used by that scr
    - **Custom components**: defined inline or imported from project files — detect via `data-name` attributes, variant props (`selected`, `disabled`), structural complexity (own layout/borders/backgrounds), and reuse across screens
    - **Nested sub-components**: walk the component tree recursively — if SelectionCard contains a custom Radio and IconBadge, those must also be in the manifest
 2. For each component (library or custom), look it up in the manifest's `components` array
-3. If ANY component is missing from the manifest or has `status` other than `"approved"`:
+3. If ANY component is missing from the manifest or has `status` other than `"approved"` or `"adopted"`:
    - **STOP. Do not push the screen.**
    - Report ALL blocking components (library and custom) and their status
    - Example error:

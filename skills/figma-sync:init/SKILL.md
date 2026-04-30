@@ -218,7 +218,82 @@ Match the component keys from 5a against the libraries from 5b (by searching com
 
 Icon libraries are especially important to identify, as push agents need them for INSTANCE_SWAP.
 
-## Step 6: Set Up Figma File (AGENT)
+## Step 6: Scan & Adopt Existing Components (AGENT)
+
+**Orchestrator decides:** whether the file has existing components worth adopting, matching strategy, confirmation of ambiguous matches.
+**Agent executes:** figma_execute calls to scan pages, collect component metadata, take screenshots for confirmation.
+**Orchestrator verifies:** match quality, presents ambiguous matches to user for confirmation.
+
+If the Figma file already has components (most real-world files do), detect them and match them to the codebase inventory from Step 2 instead of treating the file as blank.
+
+### 6a: Scan Figma file for local components
+
+Walk ALL pages (not just a "Components" page — files often organize components across sub-pages like "↳ Table", "↳ App Bar", etc.):
+
+```js
+const components = [];
+for (const page of figma.root.children) {
+  await page.loadAsync();
+  const nodes = page.findAll(n => n.type === 'COMPONENT_SET' || (n.type === 'COMPONENT' && n.parent.type !== 'COMPONENT_SET'));
+  for (const node of nodes) {
+    components.push({
+      name: node.name,
+      nodeId: node.id,
+      type: node.type,
+      page: page.name,
+      variantAxes: node.type === 'COMPONENT_SET'
+        ? Object.keys(node.componentPropertyDefinitions).filter(k => node.componentPropertyDefinitions[k].type === 'VARIANT')
+        : [],
+      childCount: node.children?.length || 0
+    });
+  }
+}
+```
+
+For each component collect: name, node ID, type (COMPONENT_SET or standalone COMPONENT), page location, variant axes, child count.
+
+### 6b: Match against codebase inventory
+
+Compare Figma component names against the library + custom component inventory from Step 2. Apply matching strategies in order of confidence:
+
+1. **Exact name match** (highest confidence) — Figma "Button" ↔ code `Button`. Case-insensitive, ignore spaces vs camelCase ("File Uploader" ↔ `FileUploader`).
+
+2. **Partial/fuzzy name match** (medium confidence) — Figma "Primary Button" ↔ code `Button` with `variant=primary`. Figma "Project Navigation" ↔ code `Sidebar` (semantic overlap). Only propose if name overlap > 50% or clear semantic equivalence.
+
+3. **Interactive confirmation** (for ambiguous matches) — Present the user with:
+   - Figma component name + page location + variant count
+   - Candidate code component name + file path + prop types
+   - Ask: "Is Figma '[name]' the same as your code component '[name]'?"
+   - Take a screenshot of the Figma component for visual reference if needed
+
+### 6c: Record matches in manifest
+
+For each confirmed match:
+- Set `status` to `"adopted"` in the manifest components array
+- Populate `figmaNodeId` with the existing Figma node ID
+- Add to `nodeMap` as `component/[Name]` → node ID
+- Record `variantAxes` from the Figma component's property definitions
+
+For unmatched code components:
+- Set `status` to `"pending"` as normal — these need to be pushed later
+
+For unmatched Figma components:
+- Report them to the user: "These Figma components have no matching React component: [list]"
+- Do NOT delete or modify them
+
+### 6d: Adopt implications
+
+Adopted components:
+- Are treated identically to `"approved"` for the Screen Push Guard (they exist in Figma, instances can be created from them)
+- Are SKIPPED during `figma-sync:push components` — they already exist
+- Can be overwritten with `figma-sync:push component [Name] --force` if the designer wants to rebuild them from code
+- Their `figmaNodeId` is used by screen composition to instantiate them
+
+### Skip condition
+
+If the Figma file has zero local COMPONENT_SET or COMPONENT nodes (truly blank file), skip this step entirely and proceed to Step 7.
+
+## Step 7: Set Up Figma File (AGENT)
 
 **Orchestrator decides:** page names, collection structure, variable names and modes. Asks user to confirm file is open.
 **Agent executes:** all figma_execute calls — creating pages, variable collections, variables, modes.
@@ -238,7 +313,9 @@ Icon libraries are especially important to identify, as push agents need them fo
    - Set up modes if applicable (light/dark themes, component states, etc.)
 6. Take a screenshot to verify the file structure is correct
 
-## Step 7: Write Manifest (ORCHESTRATOR)
+**Note:** If components were adopted in Step 6, the file structure setup still proceeds (variable collections, pages) but the adopted components are left untouched. Do not recreate or modify any component nodes that were matched and marked as `"adopted"`.
+
+## Step 8: Write Manifest (ORCHESTRATOR)
 
 The orchestrator does this directly — lightweight file write based on agent-reported node IDs.
 
@@ -250,10 +327,10 @@ Key fields init must populate:
 - `stack` — detected library, styling, and framework
 - `figma.fileId` and `figma.fileName` — from the open Figma file
 - `figma.libraries` — detected linked libraries from Step 5 (`inUse` with component keys, `available` with library keys)
-- `tokens.collections` — variable collection IDs, mode IDs, and variable IDs created in Step 6
-- `components` — all detected components with `status: "pending"` (not yet pushed)
+- `tokens.collections` — variable collection IDs, mode IDs, and variable IDs created in Step 7
+- `components` — all detected components with `status: "pending"` (not yet pushed), except adopted components which get `status: "adopted"` and their `figmaNodeId` populated from Step 6
 - `screens` — all detected screens with `status: "pending"`
-- `nodeMap` — empty (populated by `figma-sync:push`)
+- `nodeMap` — pre-populated with `component/[Name]` → node ID entries for adopted components from Step 6; empty for all others (populated later by `figma-sync:push`)
 - `log` — single entry recording the init operation
 
 ## Outputs

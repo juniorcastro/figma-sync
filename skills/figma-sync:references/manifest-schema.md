@@ -13,6 +13,7 @@ The manifest file (`figma-sync.json`) lives at the project root and tracks all s
     "styling": "tailwind | css-modules | styled-components | css",
     "framework": "next | vite | cra"
   },
+  "parent": "string | null — relative path to a parent manifest (for monorepos where components and screens are tracked separately)",
   "figma": {
     "fileId": "string — Figma file key",
     "fileName": "string — Figma file name",
@@ -62,7 +63,7 @@ The manifest file (`figma-sync.json`) lives at the project root and tracks all s
         "boundVariables": ["variable names"],
         "sharedVariables": ["variable names"]
       },
-      "status": "pending | approved | rejected",
+      "status": "pending | adopted | approved | rejected",
       "lastPushed": "ISO date string or null"
     }
   ],
@@ -73,7 +74,7 @@ The manifest file (`figma-sync.json`) lives at the project root and tracks all s
       "figmaNodeId": "string — frame node ID or null",
       "states": ["empty", "populated", "error", "loading"],
       "usesComponents": ["component names referenced"],
-      "status": "pending | approved | rejected",
+      "status": "pending | adopted | approved | rejected",
       "lastPushed": "ISO date string or null"
     }
   ],
@@ -105,6 +106,7 @@ Never delete or modify existing log entries. Each sync operation appends a new e
 ### Status values
 
 - **pending** — Detected in the codebase but not yet pushed to Figma. The component/screen exists in the manifest as a tracking placeholder.
+- **adopted** — Existed in the Figma file before figma-sync was initialized. Matched to a codebase component during init. Treated identically to "approved" for the Screen Push Guard (instances can be created from it). Skipped during push unless --force is used.
 - **approved** — Pushed to Figma and the designer has approved it. No further action needed until the source code changes.
 - **rejected** — Pushed to Figma but the designer rejected it (visual mismatch, wrong structure, etc.). Needs investigation and a re-push.
 
@@ -117,6 +119,16 @@ Never delete or modify existing log entries. Each sync operation appends a new e
 - **available** — All team libraries accessible to the file, discovered via `search_design_system`. These are libraries the file *could* use but hasn't yet. Useful for knowing what assets exist before creating raw alternatives.
 
 Both lists are populated during `figma-sync:init` and updated incrementally during pushes (when new library components are used for the first time, add them to `inUse`).
+
+### Parent manifest enables monorepo component sharing
+
+The `parent` field contains a relative path to another project's `.figma-sync/figma-sync.json`. This is used in monorepos where:
+- Shared components are tracked in a parent manifest (e.g., `packages/components/.figma-sync/figma-sync.json`)
+- Prototype screens are tracked in a child manifest (e.g., `prototypes/my-app/.figma-sync/figma-sync.json`)
+
+The Screen Push Guard resolves components from both the local manifest AND the parent manifest. A component is considered available if it has `status: "adopted"` or `"approved"` in either manifest.
+
+During init, if a dependency is discovered that already has a `.figma-sync/` manifest, the user is asked whether to link to it. If yes, the `parent` field is populated with the relative path.
 
 ### Variable collection IDs and mode IDs enable fast lookups
 
