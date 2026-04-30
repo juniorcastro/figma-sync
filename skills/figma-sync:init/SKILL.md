@@ -15,6 +15,29 @@ Before proceeding, verify the figma-sync:references skill is installed:
 1. Check that `.claude/skills/figma-sync:references/figma-console-gotchas.md` exists using Read
 2. If missing, stop and tell the user: "figma-sync references are missing. Run `npx skills add juniorcastro/figma-sync` to install all skills."
 
+## Existing Manifest Guard
+
+Before running the full init flow, check if `.figma-sync/figma-sync.json` already exists.
+
+If a manifest exists:
+
+1. **Run `/figma-sync:status`** to validate the current manifest against the codebase and (if bridge is connected) the Figma file.
+2. **Show the status report** to the user.
+3. **Offer three choices:**
+   - **Update** — keep the existing manifest, merge in any untracked components as `"pending"`, remove stale entries whose source files no longer exist. Preserves all adopted/approved components and their Figma node IDs.
+   - **Overwrite** — discard the existing manifest and run init from scratch. Use this if the manifest is severely out of date or the Figma file has changed significantly.
+   - **Abort** — stop without changes.
+
+If the user chooses **Update**:
+- Add untracked components (from the status report) to the manifest with `status: "pending"` and `figmaNodeId: null`
+- Remove components whose sourcePath no longer exists on disk
+- Append a log entry: `{ direction: "init", target: "project", outcome: "success", summary: "Updated manifest: added N components, removed M stale entries" }`
+- Skip to Step 8 (Write Manifest) — no need to re-run stack detection, token extraction, or Figma file setup
+
+If the user chooses **Overwrite**, continue with Step 1 as normal.
+
+If no manifest exists, continue with Step 1 as normal.
+
 ## Execution Model — READ THIS FIRST
 
 You are the **orchestrator**. All heavy execution — scripts, browser automation, figma_execute calls, file writes — MUST be delegated to subagents.
